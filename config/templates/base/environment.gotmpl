@@ -1,0 +1,9 @@
+{{- define "environment" -}}
+{{- with . -}}
+env:
+{{- range . }}
+  - name: {{ .Name }}
+    value: {{ .Value | quote }}
+{{- end }}
+{{- end }}
+{{- end }}

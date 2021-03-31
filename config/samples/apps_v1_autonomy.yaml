@@ -1,0 +1,22 @@
+apiVersion: apps.dameng.com/v1
+kind: Autonomy
+metadata:
+  name: autonomy
+spec:
+  describe: a
+  id: "1"
+  image:
+    repository: library/echoserver
+    tag: "1.10"
+  ports:
+    - containerPort: 8080
+      id: jcfiiadc
+      protocol: TCP
+  replicas: 1
+  serviceName: a
+  title: autonomy
+  configs:
+    - id: c1
+      mount: /etc/app/a.txt
+      content: |-
+        aaa=cccc

@@ -1,0 +1,12 @@
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+  - name: manager-template
+    files:
+      - base/environment.gotmpl
+      - base/handler.gotmpl
+      - base/initial.gotmpl
+      - base/lifecycle.gotmpl
+      - base/probe.gotmpl
+      - apps.dameng.com_autonomies.gotmpl

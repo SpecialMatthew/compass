@@ -1,0 +1,18 @@
+{{- define "probe" -}}
+{{- with .InitialDelaySeconds }}
+  initialDelaySeconds: {{ . }}
+{{- end }}
+{{- with .TimeoutSeconds }}
+  timeoutSeconds: {{ . }}
+{{- end }}
+{{- with .PeriodSeconds }}
+  periodSeconds: {{ . }}
+{{- end }}
+{{- with .SuccessThreshold }}
+  successThreshold: {{ . }}
+{{- end }}
+{{- with .FailureThreshold }}
+  failureThreshold: {{ . }}
+{{- end }}
+  {{- include "handler" .Handler | nindent 2 }}
+{{- end }}

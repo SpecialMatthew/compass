@@ -1,0 +1,20 @@
+# permissions for end users to view autonomies.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: autonomy-viewer-role
+rules:
+- apiGroups:
+  - apps.dameng.com
+  resources:
+  - autonomies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps.dameng.com
+  resources:
+  - autonomies/status
+  verbs:
+  - get

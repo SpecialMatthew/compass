@@ -1,0 +1,31 @@
+{{- define "handler" -}}
+{{- if eq .Action "Exec" -}}
+exec:
+  command:
+    - /bin/sh
+    - -c
+    - {{ .Command }}
+{{- else if eq .Action "HTTPGet" -}}
+httpGet:
+{{- with .Scheme }}
+  scheme: {{ . }}
+{{- end }}
+{{- with .Host }}
+  host: {{ . }}
+{{- end }}
+  port: {{ default 8080 .Port }}
+{{- with .Path }}
+  path: {{ . }}
+{{- end }}
+{{- with .Headers }}
+  httpHeaders:
+    {{- nindent 6 (toYaml .) }}
+{{- end }}
+{{- else -}}
+tcpSocket:
+  port: {{ default 8080 .Port }}
+{{- with .Host }}
+  host: {{ . }}
+{{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,4 @@
+{{- define "lifecycle" -}}
+preStop:
+  {{- include "handler" . | nindent 2 }}
+{{- end }}

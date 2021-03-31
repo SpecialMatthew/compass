@@ -1,0 +1,335 @@
+{{- range $index := until (int (default "1" $.Spec.Replicas)) }}
+{{- range $.Spec.Volumes }}
+{{- if or (eq .Type "PersistentVolumeClaim") (eq .Type "Mounted") }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .ID }}-{{ $.Name }}-{{ $index }}
+  labels:
+    operator.dameng.com/id: {{ $.Spec.ID | quote }}
+    operator.dameng.com/title: {{ $.Spec.Title | hexenc | quote }}
+spec:
+  accessModes:
+    - {{ default "ReadWriteOnce" .AccessMode }}
+  resources:
+    requests:
+      storage: "{{ .Capacity }}Gi"
+  storageClassName: {{ .StorageClassName }}
+---
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if .Spec.Volumes }}
+kind: Service
+apiVersion: v1
+metadata:
+  labels:
+    operator.dameng.com/id: {{ .Spec.ID | quote }}
+  name: {{ .Name }}-headless
+spec:
+  ports:
+{{- range .Spec.Ports }}
+    - name: {{ .ID }}
+      targetPort: {{ .ID }}
+      port: {{ default .ContainerPort .ServerPort }}
+{{- end }}
+  clusterIP: None
+  selector:
+    operator.dameng.com/id: {{ $.Spec.ID | quote }}
+---
+kind: StatefulSet
+{{- else }}
+kind: Deployment
+{{- end }}
+apiVersion: apps/v1
+metadata:
+  name: {{ .Name }}
+  labels:
+    operator.dameng.com/id: {{ .Spec.ID | quote }}
+spec:
+{{- if .Spec.Volumes }}
+  podManagementPolicy: Parallel
+  serviceName: {{ .Name }}-headless
+{{- end }}
+  replicas: {{ default 1 .Spec.Replicas }}
+  selector:
+    matchLabels:
+      operator.dameng.com/id: {{ .Spec.ID | quote }}
+{{- with .Spec.UpgradeStrategy }}
+{{- with .RevisionHistoryLimit }}
+  revisionHistoryLimit: {{ . }}
+{{- end }}
+{{- with .MinReadySeconds }}
+  minReadySeconds: {{ . }}
+{{- end }}
+{{- with .ProgressDeadlineSeconds }}
+  progressDeadlineSeconds: {{ . }}
+{{- end }}
+{{- if .Strategy }}
+  strategy:
+    type: {{ default "RollingUpdate" .Strategy }}
+{{- if (eq (default "RollingUpdate" .Strategy) "RollingUpdate") }}
+    rollingUpdate:
+      maxUnavailable: "{{ default "25" .MaxUnavailable }}{{ if not (eq .MaxUnavailableUnit "N") }}%{{ end }}"
+      maxSurge: "{{ default "25" .MaxSurge }}{{ if not (eq .MaxSurgeUnit "N") }}%{{ end }}"
+{{- end }}
+{{- end }}
+{{- end }}
+  template:
+    metadata:
+{{- with .Spec.Metric }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: {{ default "/metrics" .MetricPath | quote }}
+        prometheus.io/port: {{ default "9100" .MetricPort | quote }}
+{{- end }}
+      labels:
+        operator.dameng.com/id: {{ .Spec.ID | quote }}
+        operator.dameng.com/title: {{ .Spec.Title | hexenc | quote }}
+{{- with .Spec.Labels }}
+{{- range . }}
+        operator.dameng.com/ulb-{{ .Name | hexenc }}: {{ .Value | hexenc | quote }}
+{{- end }}
+{{- end }}
+{{- if .Spec.Volumes }}
+        operator.dameng.com/checksum-volumes: {{ sha1sum (toYaml .Spec.Volumes) }}
+{{- end }}
+    spec:
+{{- with .Spec.ImagePullSecrets }}
+      imagePullSecrets:
+        {{- nindent 8 (toYaml .) }}
+{{- end }}
+{{- with .Spec.Initial }}
+      {{- include "initial" . | nindent 6 }}
+{{- end }}
+      containers:
+        - name: application
+          image: harbor.dameng.io/{{ .Spec.Image.Repository }}:{{ .Spec.Image.Tag }}
+          imagePullPolicy: {{ default "IfNotPresent" .Spec.Image.ImagePullPolicy }}
+{{- with .Spec.Command }}
+          command:
+            - {{ . }}
+{{- end }}
+{{- with .Spec.Parameters }}
+          args:
+{{- range . }}
+            - {{ .Value | quote }}
+{{- end }}
+{{- end }}
+{{- with (snipe . "Spec.Ports") }}
+          ports:
+{{- range . }}
+            - name: {{ .ID }}
+              containerPort: {{ .ContainerPort }}
+              protocol: {{ default "TCP" .Protocol }}
+{{- end }}
+{{- end }}
+{{- if (or .Spec.Memory .Spec.CPU) }}
+          resources:
+            limits:
+{{- with .Spec.Memory }}
+              memory: "{{ .Limit }}Mi"
+{{- end }}
+{{- with .Spec.CPU }}
+              cpu: "{{ .Limit }}m"
+{{- end }}
+            requests:
+{{- with .Spec.Memory }}
+              memory: "{{ if .Share }}{{ .Request }}{{ else }}{{ .Limit }}{{ end }}Mi"
+{{- end }}
+{{- with .Spec.CPU }}
+              cpu: "{{ if .Share }}{{ .Request }}{{ else }}{{ .Limit }}{{ end }}m"
+{{- end }}
+{{- end }}
+{{- with .Spec.Environments }}
+          {{- include "environment" . | nindent 10 }}
+{{- end }}
+{{- if or .Spec.Volumes .Spec.Configs .Spec.Logs }}
+          volumeMounts:
+{{- range .Spec.Volumes }}
+            - name: {{ .ID }}
+              mountPath: {{ .Mount }}
+{{- end }}
+{{- range .Spec.Configs }}
+            - name: {{ .ID }}
+              mountPath: {{ dir .Mount }}
+{{- end }}
+{{- range .Spec.Logs }}
+            - name: {{ .ID }}
+              mountPath: {{ .Directory }}
+{{- end }}
+{{- end }}
+{{- with .Spec.Startup }}
+          startupProbe:
+            {{- include "probe" . | nindent 10 }}
+{{- end }}
+{{- with .Spec.Liveness }}
+          livenessProbe:
+            {{- include "probe" . | nindent 10 }}
+{{- end }}
+{{- with .Spec.Readiness }}
+          readinessProbe:
+            {{- include "probe" . | nindent 10 }}
+{{- end }}
+{{- with .Spec.Terminator }}
+          lifecycle:
+            {{- include "lifecycle" .Handler | nindent 12 }}
+{{- with .Grace }}
+      terminationGracePeriodSeconds: {{ default 30 . }}
+{{- end }}
+{{- end }}
+{{- if or .Spec.Logs .Spec.Configs (filter .Spec.Volumes "Type" "HostPath") (filter .Spec.Volumes "Type" "EmptyDir") }}
+      volumes:
+{{- range .Spec.Configs }}
+        - name: {{ .ID }}
+          configMap:
+            name: {{ $.Name }}-{{ .ID }}
+{{- end }}
+{{- range .Spec.Logs }}
+        - name: {{ .ID }}
+          hostPath:
+            path: "/logs/{{ $.Spec.ID }}/{{ .Directory }}"
+            type: "DirectoryOrCreate"
+{{- end }}
+{{- range (filter .Spec.Volumes "Type" "HostPath") }}
+        - name: {{ .ID }}
+          hostPath:
+            path: "{{ .Location }}"
+            type: "{{ default "DirectoryOrCreate" .LocationType }}"
+{{- end }}
+{{- range (filter .Spec.Volumes "Type" "EmptyDir") }}
+        - name: {{ .ID }}
+          emptyDir:
+            medium: Memory
+            sizeLimit: {{ .Capacity }}Gi
+{{- end }}
+{{- end }}
+{{- with .Spec.RestartPolicy }}
+      restartPolicy: {{ . }}
+{{- end }}
+{{- with .Spec.HostAliases }}
+      hostAliases:
+        {{- nindent 8 (toYaml .) }}
+{{- end }}
+{{- with .Spec.HostPID }}
+      hostPID: {{ . }}
+{{- end }}
+{{- with .Spec.HostNetwork }}
+      hostNetwork: {{ . }}
+{{- end }}
+{{- with .Spec.HostIPC }}
+      hostIPC: {{ . }}
+{{- end }}
+{{- with .Spec.SecurityContext }}
+      securityContext:
+        {{- nindent 8 (toYaml .) }}
+{{- end }}
+{{- if or (filter .Spec.Volumes "Type" "PersistentVolumeClaim") (filter .Spec.Volumes "Type" "Mounted") }}
+  volumeClaimTemplates:
+{{- range .Spec.Volumes }}
+{{- if or (eq .Type "PersistentVolumeClaim") (eq .Type "Mounted") }}
+    - metadata:
+        name: {{ .ID }}
+        labels:
+          operator.dameng.com/id: {{ $.Spec.ID | quote }}
+          operator.dameng.com/title: {{ $.Spec.Title | hexenc | quote }}
+      spec:
+        accessModes:
+          - {{ default "ReadWriteOnce" .AccessMode }}
+        storageClassName: {{ .StorageClassName }}
+        resources:
+          requests:
+            storage: 1Gi
+{{- end }}
+{{- end }}
+{{- end }}
+{{- range .Spec.Configs }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $.Name }}-{{ .ID }}
+  labels:
+    operator.dameng.com/id: {{ $.Spec.ID | quote }}
+data:
+  {{ base .Mount }}: |-
+    {{- nindent 4 .Content }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Spec.ServiceName }}
+  labels:
+    operator.dameng.com/id: {{ $.Spec.ID | quote }}
+spec:
+  type: NodePort
+  selector:
+    operator.dameng.com/id: {{ $.Spec.ID | quote }}
+  ports:
+{{- range .Spec.Ports }}
+    - name: {{ .ID }}
+      targetPort: {{ .ID }}
+      port: {{ default .ContainerPort .ServerPort }}
+{{- if .NodePort }}
+      nodePort: {{ .NodePort }}
+{{- end }}
+{{- end }}
+{{- range .Spec.Ports }}
+{{- if .Ingress }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $.Name }}-{{ .ID }}
+  labels:
+    operator.dameng.com/id: {{ $.Spec.ID | quote }}
+  annotations:
+    kubernetes.io/ingress.class: istio
+spec:
+  rules:
+    - host: {{ .Host | quote }}
+      http:
+        paths:
+          - path: {{ default "/" .Path }}
+            pathType: {{ default "Prefix" .PathType }}
+            backend:
+              service:
+                name: {{ $.Spec.ServiceName }}
+                port:
+                  number: {{ default .ContainerPort .ServerPort }}
+{{- end }}
+{{- end }}
+{{- with .Spec.Autoscaler }}
+---
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $.Name }}
+  labels:
+    operator.dameng.com/id: {{ $.Spec.ID | quote }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $.Name }}
+  minReplicas: {{ default "1" .Min }}
+  maxReplicas: {{ default "10" .Max }}
+  metrics:
+{{- with .CPU }}
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: {{ . }}
+{{- end }}
+{{- with .Memory }}
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: {{ . }}
+{{- end }}
+{{- end }}

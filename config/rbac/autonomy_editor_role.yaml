@@ -1,0 +1,24 @@
+# permissions for end users to edit autonomies.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: autonomy-editor-role
+rules:
+- apiGroups:
+  - apps.dameng.com
+  resources:
+  - autonomies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps.dameng.com
+  resources:
+  - autonomies/status
+  verbs:
+  - get
