@@ -1,0 +1,7 @@
+apiVersion: apps.dameng.com/v1
+kind: Dm
+metadata:
+  name: dm-sample
+spec:
+  # Add fields here
+  foo: bar
