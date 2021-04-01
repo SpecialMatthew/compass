@@ -1,7 +1,0 @@
-apiVersion: apps.dameng.com/v1
-kind: Dm8
-metadata:
-  name: dm8-sample
-spec:
-  # Add fields here
-  foo: bar

@@ -3,9 +3,9 @@ module git.ypt.dameng.com/dmcca/compass
 go 1.15
 
 require (
-	github.com/Masterminds/sprig/v3 v3.2.0
-	github.com/dustinkirkland/golang-petname v0.0.0-20191129215211-8e5a1ed0cff0
 	github.com/fatih/structs v1.1.0
+	github.com/dustinkirkland/golang-petname v0.0.0-20191129215211-8e5a1ed0cff0
+	github.com/Masterminds/sprig/v3 v3.2.0
 	github.com/go-logr/logr v0.3.0
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.2
