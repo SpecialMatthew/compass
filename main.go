@@ -65,6 +65,7 @@ func init() {
 	ur.Must(cgs.AddToScheme(scheme))
 
 	ur.Must(appsv1.AddToScheme(scheme))
+	utilruntime.Must(appsv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -111,6 +112,14 @@ func main() {
 
 	if err = (&appsv1.Autonomy{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "Autonomy")
+		os.Exit(1)
+	}
+	if err = (&controllers.Dm8Reconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("Dm8"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Dm8")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder
